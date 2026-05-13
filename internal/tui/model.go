@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"sshm/internal/config"
+	"sshm/internal/ssh"
 )
 
 type page int
@@ -17,7 +18,7 @@ const (
 	pageEdit
 	pageDelete
 	pageImport
-	pageTransfer
+	pageBrowser
 )
 
 type Model struct {
@@ -37,12 +38,17 @@ type Model struct {
 	width  int
 	height int
 
-	xferMode    string
-	xferLocal   string
-	xferRemote  string
-	xferStatus  string
-	xferRunning bool
-	xferPercent float64
+	// browser state
+	browserFocus        string
+	browserLocalCwd     string
+	browserRemoteCwd    string
+	browserLocalFiles   []ssh.FileEntry
+	browserRemoteFiles  []ssh.FileEntry
+	browserLocalCur     int
+	browserRemoteCur    int
+	browserStatus       string
+	browserTransferring bool
+	browserPercent      float64
 
 	importStatus string
 }
@@ -60,12 +66,18 @@ type msgStatus struct {
 	ok   bool
 }
 
-type msgXferDone struct {
+type msgBrowserDir struct {
+	side    string
+	entries []ssh.FileEntry
+	err     error
+}
+
+type msgBrowserTransferDone struct {
 	err error
 	msg string
 }
 
-type msgXferProgress struct {
+type msgBrowserTransferProgress struct {
 	percent float64
 }
 
@@ -79,15 +91,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case msgStatus:
 		m.status, m.statusOK = msg.text, msg.ok
 
-	case msgXferProgress:
-		m.xferPercent = msg.percent
-
-	case msgXferDone:
-		m.xferRunning = false
+	case msgBrowserDir:
 		if msg.err != nil {
-			m.xferStatus = styleDanger.Render("✗ 失败: " + msg.err.Error())
+			m.browserStatus = styleDanger.Render("✗ " + msg.err.Error())
+			return m, nil
+		}
+		if msg.side == "local" {
+			m.browserLocalFiles = msg.entries
+			m.browserLocalCur = 0
 		} else {
-			m.xferStatus = styleSuccess.Render("✓ " + msg.msg)
+			m.browserRemoteFiles = msg.entries
+			m.browserRemoteCur = 0
+		}
+		m.browserStatus = ""
+
+	case msgBrowserTransferProgress:
+		m.browserPercent = msg.percent
+
+	case msgBrowserTransferDone:
+		m.browserTransferring = false
+		if msg.err != nil {
+			m.browserStatus = styleDanger.Render("✗ 失败: " + msg.err.Error())
+		} else {
+			m.browserStatus = styleSuccess.Render("✓ " + msg.msg)
 		}
 
 	case msgSSHDone:
@@ -115,8 +141,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.page == pageImport {
 		return m.handleImportKey(msg)
 	}
-	if m.page == pageTransfer {
-		return m.handleXferKey(msg)
+	if m.page == pageBrowser {
+		return m.handleBrowserKey(msg)
 	}
 	if m.page == pageList {
 		return m.handleListKey(msg)
@@ -144,8 +170,8 @@ func (m Model) View() string {
 		return m.viewImportForm()
 	case pageDelete:
 		return m.viewDelete()
-	case pageTransfer:
-		return m.viewTransfer()
+	case pageBrowser:
+		return m.viewBrowser()
 	}
 	return ""
 }

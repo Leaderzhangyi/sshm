@@ -4,9 +4,7 @@ package ssh
 import (
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strconv"
-	"strings"
 
 	"sshm/internal/config"
 )
@@ -33,14 +31,6 @@ func BuildCmd(c *config.Connection) *exec.Cmd {
 		if sp, err := exec.LookPath("sshpass"); err == nil {
 			return exec.Command(sp, append([]string{"-p", c.Password, "ssh"}, args...)...)
 		}
-	}
-
-	if runtime.GOOS == "windows" {
-		if wt, err := exec.LookPath("wt"); err == nil {
-			return exec.Command(wt, append([]string{"ssh"}, args...)...)
-		}
-		sshArgs := append([]string{"ssh"}, args...)
-		return exec.Command("cmd", "/c", "start", strings.Join(sshArgs, " "))
 	}
 
 	return exec.Command("ssh", args...)

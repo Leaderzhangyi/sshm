@@ -266,13 +266,6 @@ func makeImportInputs() []textinput.Model {
 	return []textinput.Model{ti}
 }
 
-func makeXferInputs() []textinput.Model {
-	return []textinput.Model{
-		newInput("本地文件路径"),
-		newInput("远端文件路径"),
-	}
-}
-
 func inputVals(inputs []textinput.Model) []string {
 	out := make([]string, len(inputs))
 	for i, inp := range inputs {

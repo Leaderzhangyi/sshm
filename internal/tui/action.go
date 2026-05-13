@@ -29,8 +29,7 @@ func (m Model) viewAction() string {
 
 	actions := []string{
 		styleKey.Render(" [1] ") + styleMuted.Render("SSH 终端"),
-		styleKey.Render(" [2] ") + styleMuted.Render("上传文件 → 远端"),
-		styleKey.Render(" [3] ") + styleMuted.Render("下载文件 ← 远端"),
+		styleKey.Render(" [2] ") + styleMuted.Render("文件浏览器 (SFTP)"),
 		"",
 		styleKey.Render(" [Esc] ") + styleMuted.Render("返回"),
 	}
@@ -63,21 +62,8 @@ func (m *Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return msgSSHDone{err}
 		})
 	case "2":
-		m.page = pageTransfer
-		m.xferMode = "upload"
-		m.xferLocal, m.xferRemote, m.xferStatus = "", "", ""
-		m.xferPercent = 0
-		m.inputs = makeXferInputs()
-		m.inputIdx = 0
-		m.inputs[0].Focus()
-	case "3":
-		m.page = pageTransfer
-		m.xferMode = "download"
-		m.xferLocal, m.xferRemote, m.xferStatus = "", "", ""
-		m.xferPercent = 0
-		m.inputs = makeXferInputs()
-		m.inputIdx = 0
-		m.inputs[0].Focus()
+		m.page = pageBrowser
+		return m, initBrowser(m)
 	}
 	return m, nil
 }

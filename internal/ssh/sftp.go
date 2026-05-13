@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/pkg/sftp"
@@ -281,4 +282,74 @@ func downloadDirectory(sftpClient *sftp.Client, remotePath, localPath string, pr
 	}
 
 	return nil
+}
+
+type FileEntry struct {
+	Name    string
+	Size    int64
+	IsDir   bool
+	ModTime time.Time
+}
+
+func sortEntries(entries []FileEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir
+		}
+		return entries[i].Name < entries[j].Name
+	})
+}
+
+func ListRemoteDir(c *config.Connection, path string) ([]FileEntry, error) {
+	client, err := newSSHClient(c)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	sftpClient, err := sftp.NewClient(client)
+	if err != nil {
+		return nil, fmt.Errorf("创建SFTP客户端失败: %w", err)
+	}
+	defer sftpClient.Close()
+
+	infos, err := sftpClient.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("读取远程目录失败: %w", err)
+	}
+
+	entries := []FileEntry{{Name: "..", IsDir: true}}
+	for _, info := range infos {
+		entries = append(entries, FileEntry{
+			Name:    info.Name(),
+			Size:    info.Size(),
+			IsDir:   info.IsDir(),
+			ModTime: info.ModTime(),
+		})
+	}
+	sortEntries(entries)
+	return entries, nil
+}
+
+func ListLocalDir(path string) ([]FileEntry, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("读取本地目录失败: %w", err)
+	}
+
+	result := []FileEntry{{Name: "..", IsDir: true}}
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		result = append(result, FileEntry{
+			Name:    e.Name(),
+			Size:    info.Size(),
+			IsDir:   e.IsDir(),
+			ModTime: info.ModTime(),
+		})
+	}
+	sortEntries(result)
+	return result, nil
 }
