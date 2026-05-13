@@ -8,7 +8,7 @@ echo  Building Windows 386
 echo ==============================
 set GOOS=windows
 set GOARCH=386
-go build -ldflags="-s -w" -o sshm_windows_386.exe ./release
+go build -ldflags="-s -w" -o release/sshm_windows_386.exe .
 
 echo.
 echo ==============================
@@ -16,7 +16,7 @@ echo  Building Windows amd64
 echo ==============================
 set GOOS=windows
 set GOARCH=amd64
-go build -ldflags="-s -w" -o sshm_windows_amd64.exe ./release
+go build -ldflags="-s -w" -o release/sshm_windows_amd64.exe .
 
 echo.
 echo ==============================
@@ -24,7 +24,7 @@ echo  Building Linux amd64
 echo ==============================
 set GOOS=linux
 set GOARCH=amd64
-go build -ldflags="-s -w" -o sshm_linux_amd64 ./release
+go build -ldflags="-s -w" -o release/sshm_linux_amd64 .
 
 @REM echo.
 @REM echo ==============================

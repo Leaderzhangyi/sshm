@@ -1,0 +1,26 @@
+{
+  "connections": [
+    {
+      "name": "阿里云ECS-01",
+      "host": "47.108.57.123",
+      "port": 22,
+      "user": "root",
+      "auth": "password",
+      "password": "",
+      "key_path": "",
+      "proxy_jump": "",
+      "group": "测试/al1"
+    },
+    {
+      "name": "示例-DB01",
+      "host": "192.168.1.20",
+      "port": 22,
+      "user": "dbadmin",
+      "auth": "key",
+      "password": "",
+      "key_path": "/home/user/.ssh/db01.pem",
+      "proxy_jump": "root@192.168.1.1:22",
+      "group": "测试/al1"
+    }
+  ]
+}

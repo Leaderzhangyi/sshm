@@ -3,6 +3,7 @@ package ssh
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -33,6 +34,11 @@ func BuildCmd(c *config.Connection) *exec.Cmd {
 		if sp, err := exec.LookPath("sshpass"); err == nil {
 			return exec.Command(sp, append([]string{"-p", c.Password, "ssh"}, args...)...)
 		}
+		if runtime.GOOS != "windows" {
+			if cmd := buildAskPassCmd(c.Password, args); cmd != nil {
+				return cmd
+			}
+		}
 	}
 
 	if runtime.GOOS == "windows" {
@@ -44,4 +50,25 @@ func BuildCmd(c *config.Connection) *exec.Cmd {
 	}
 
 	return exec.Command("ssh", args...)
+}
+
+func buildAskPassCmd(password string, sshArgs []string) *exec.Cmd {
+	tmpFile, err := os.CreateTemp("", "sshm-askpass-")
+	if err != nil {
+		return nil
+	}
+	script := fmt.Sprintf("#!/bin/sh\ncat << 'SSHM_EOF'\n%s\nSSHM_EOF\n", password)
+	if _, err := tmpFile.WriteString(script); err != nil {
+		tmpFile.Close()
+		return nil
+	}
+	tmpFile.Close()
+	os.Chmod(tmpFile.Name(), 0700)
+
+	cmd := exec.Command("setsid", append([]string{"ssh"}, sshArgs...)...)
+	cmd.Env = append(os.Environ(),
+		"SSH_ASKPASS="+tmpFile.Name(),
+		"DISPLAY=dummy:0",
+	)
+	return cmd
 }
