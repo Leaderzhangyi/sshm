@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"sshm/internal/config"
-	"sshm/internal/ssh"
+	"sshm/internal/terminal"
 )
 
 func (m Model) viewAction() string {
@@ -58,9 +58,22 @@ func (m *Model) handleActionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.page = pageList
 	case "1":
 		conn := m.cfg.Connections[m.selConn]
-		return m, tea.ExecProcess(ssh.BuildCmd(&conn), func(err error) tea.Msg {
-			return msgSSHDone{err}
-		})
+		w := m.width
+		h := m.height - 1
+		if w == 0 {
+			w = 80
+		}
+		if h == 0 {
+			h = 24
+		}
+		pane, err := terminal.NewPane(&conn, w, h)
+		if err != nil {
+			m.setStatus("启动终端失败: "+err.Error(), false)
+			return m, nil
+		}
+		m.termPane = pane
+		m.page = pageTerminal
+		return m, pane.ReadCmd()
 	case "2":
 		m.page = pageBrowser
 		return m, initBrowser(m)

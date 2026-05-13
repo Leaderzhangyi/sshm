@@ -2,11 +2,14 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"sshm/internal/config"
 	"sshm/internal/ssh"
+	"sshm/internal/terminal"
 )
 
 type page int
@@ -19,6 +22,7 @@ const (
 	pageDelete
 	pageImport
 	pageBrowser
+	pageTerminal
 )
 
 type Model struct {
@@ -49,6 +53,8 @@ type Model struct {
 	browserStatus       string
 	browserTransferring bool
 	browserPercent      float64
+
+	termPane *terminal.Pane
 
 	importStatus string
 }
@@ -87,6 +93,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		if m.termPane != nil {
+			m.termPane.Resize(msg.Width, msg.Height-1)
+		}
 
 	case msgStatus:
 		m.status, m.statusOK = msg.text, msg.ok
@@ -116,6 +125,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.browserStatus = styleSuccess.Render("✓ " + msg.msg)
 		}
 
+	case terminal.MsgOutput:
+		if m.termPane != nil && m.termPane.Running {
+			m.termPane.Screen.Process(msg.Data)
+			return m, m.termPane.ReadCmd()
+		}
+
+	case terminal.MsgDone:
+		if m.termPane != nil {
+			m.termPane.Close()
+			m.termPane = nil
+			m.page = pageAction
+			m.setStatus("SSH 会话结束", true)
+		}
+
 	case msgSSHDone:
 		m.page = pageList
 		if msg.err != nil {
@@ -135,6 +158,9 @@ func (m *Model) setStatus(text string, ok bool) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.page == pageTerminal {
+		return m.handleTerminalKey(msg)
+	}
 	if m.page == pageAdd || m.page == pageEdit {
 		return m.handleFormKey(msg)
 	}
@@ -156,6 +182,52 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleTerminalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "f10" {
+		if m.termPane != nil {
+			m.termPane.Close()
+			m.termPane = nil
+		}
+		m.page = pageAction
+		return m, nil
+	}
+	if m.termPane != nil && m.termPane.Running {
+		m.termPane.Write(terminal.KeyToBytes(msg))
+	}
+	return m, nil
+}
+
+func (m Model) viewTerminal() string {
+	if m.termPane == nil {
+		return ""
+	}
+	c := m.cfg.Connections[m.selConn]
+	port := c.Port
+	if port == 0 {
+		port = 22
+	}
+	info := fmt.Sprintf(" SSH: %s (%s@%s:%d) ", c.Name, c.User, c.Host, port)
+	hint := " F10 返回 "
+	pad := m.width - len(info) - len(hint)
+	if pad < 0 {
+		pad = 0
+	}
+	bar := styleStatusBar.Render(info + stringsRepeat(" ", pad) + styleMuted.Render(hint))
+	content := m.termPane.Screen.String()
+	return content + "\n" + bar
+}
+
+func stringsRepeat(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	result := ""
+	for i := 0; i < n; i++ {
+		result += s
+	}
+	return result
+}
+
 func (m Model) View() string {
 	switch m.page {
 	case pageList:
@@ -172,6 +244,8 @@ func (m Model) View() string {
 		return m.viewDelete()
 	case pageBrowser:
 		return m.viewBrowser()
+	case pageTerminal:
+		return m.viewTerminal()
 	}
 	return ""
 }
